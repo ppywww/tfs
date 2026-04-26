@@ -1,0 +1,38 @@
+# Compiled binary files
+*_test
+block_stat
+main
+mmap_test
+file_op_test
+
+# Object files
+*.o
+*.obj
+
+# Executable files
+*.exe
+*.out
+*.app
+
+# Build directories
+build/
+cmake_build/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Data directories
+mainblock/
+index/
+
+# Text data files
+file_op.txt
+mmap_file_op.txt

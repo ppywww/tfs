@@ -1,34 +1,36 @@
 CXX = g++
-CXXFLAGS = -I.
+CXXFLAGS = -Iinclude
 
-all: block_init_test block_write_test block_read_test block_delete_test block_tidy_test block_stat mmap_file_op_test  main
+SRCDIR = src
+TESTDIR = test
 
-block_init_test: block_init_test.cpp mmap_file.cpp file_op.cpp index_handle.cpp mmap_file_op.cpp
-		$(CXX) $(CXXFLAGS) -o $@ $^
+SRCFILES = $(SRCDIR)/mmap_file.cpp $(SRCDIR)/file_op.cpp $(SRCDIR)/index_handle.cpp $(SRCDIR)/mmap_file_op.cpp
 
-block_write_test: block_write_test.cpp mmap_file.cpp file_op.cpp index_handle.cpp mmap_file_op.cpp
-		$(CXX) $(CXXFLAGS) -o $@ $^
+all: block_init_test block_write_test block_read_test block_delete_test block_tidy_test block_stat mmap_file_op_test main
 
-block_read_test: block_read_test.cpp mmap_file.cpp file_op.cpp index_handle.cpp mmap_file_op.cpp
-		$(CXX) $(CXXFLAGS) -o $@ $^
+block_init_test: $(TESTDIR)/block_init_test.cpp $(SRCFILES)
+	$(CXX) $(CXXFLAGS) -o $@ $^
 
-block_delete_test: block_delete_test.cpp mmap_file.cpp file_op.cpp index_handle.cpp mmap_file_op.cpp
-		$(CXX) $(CXXFLAGS) -o $@ $^
+block_write_test: $(TESTDIR)/block_write_test.cpp $(SRCFILES)
+	$(CXX) $(CXXFLAGS) -o $@ $^
 
-block_tidy_test: block_tidy_test.cpp mmap_file.cpp file_op.cpp index_handle.cpp mmap_file_op.cpp
-		$(CXX) $(CXXFLAGS) -o $@ $^
+block_read_test: $(TESTDIR)/block_read_test.cpp $(SRCFILES)
+	$(CXX) $(CXXFLAGS) -o $@ $^
 
-block_stat: block_stat.cpp mmap_file.cpp file_op.cpp index_handle.cpp mmap_file_op.cpp
-		$(CXX) $(CXXFLAGS) -o $@ $^
+block_delete_test: $(TESTDIR)/block_delete_test.cpp $(SRCFILES)
+	$(CXX) $(CXXFLAGS) -o $@ $^
 
-mmap_file_op_test: mmap_file_op_test.cpp mmap_file.cpp file_op.cpp index_handle.cpp mmap_file_op.cpp
-		$(CXX) $(CXXFLAGS) -o $@ $^
+block_tidy_test: $(TESTDIR)/block_tidy_test.cpp $(SRCFILES)
+	$(CXX) $(CXXFLAGS) -o $@ $^
 
-op_test: op_test.cpp file_op.cpp
-		$(CXX) $(CXXFLAGS) -o $@ $^
+block_stat: $(TESTDIR)/block_stat.cpp $(SRCFILES)
+	$(CXX) $(CXXFLAGS) -o $@ $^
 
-main: main.cpp mmap_file.cpp file_op.cpp
-		$(CXX) $(CXXFLAGS) -o $@ $^
+mmap_file_op_test: $(TESTDIR)/mmap_file_op_test.cpp $(SRCFILES)
+	$(CXX) $(CXXFLAGS) -o $@ $^
+
+main: $(SRCDIR)/main.cpp $(SRCDIR)/mmap_file.cpp $(SRCDIR)/file_op.cpp
+	$(CXX) $(CXXFLAGS) -o $@ $^
 
 clean:
-		rm -f block_init_test block_write_test block_read_test block_delete_test block_tidy_test block_stat mmap_file_op_test  op_test main
+	rm -f block_init_test block_write_test block_read_test block_delete_test block_tidy_test block_stat mmap_file_op_test main

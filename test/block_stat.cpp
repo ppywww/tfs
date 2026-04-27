@@ -15,7 +15,8 @@ static int32_t block_id = 1;
 
 static int debug = 1;
 
-int main(int argc, char** argv)     //比如：argv[0] = "rm"  argv[1] = "-f"  argv[2] = "a.out"   此时  argc = 3
+// 修复警告：使用unused属性标记未使用的参数
+int main(int /*argc*/, char** /*argv*/)     //比如：argv[0] = "rm"  argv[1] = "-f"  argv[2] = "a.out"   此时  argc = 3
 {
 	string mainblock_path;
 	string index_path;

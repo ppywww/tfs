@@ -13,10 +13,12 @@ namespace conway
 		struct IndexHeader
 		{
 		  public:
-			IndexHeader()
-			{
-				memset(this, 0, sizeof(IndexHeader));
-			}
+			// 修复警告：使用值初始化替代memset
+		IndexHeader() : block_info(), bucket_size_(0), data_file_offset_(0), index_file_size_(0), free_head_offset_(0)
+		{
+			// 原代码：memset(this, 0, sizeof(IndexHeader));
+			// 原因：memset用于清除非平凡类型的对象可能导致未定义行为
+		}
 			
 			BlockInfo block_info;        //meta block info
 			int32_t bucket_size_;        //hash bucket size(个数)

@@ -533,7 +533,8 @@ namespace conway
 				if(TFS_SUCCESS == ret)           //已经在哈希链表中读到
 				{
 					
-					if(meta_info.get_size() <= sizeof(buffer))        //一次读完
+					// 修复警告：将sizeof(buffer)转换为int32_t以避免有符号和无符号整数比较
+				if(meta_info.get_size() <= static_cast<int32_t>(sizeof(buffer)))        //一次读完
 					{	
 						ret = fo->pread_file(buffer, meta_info.get_size(), meta_info.get_offset());      
 						if(ret == TFS_SUCCESS)    //文件读成功,将文件重新写入块中

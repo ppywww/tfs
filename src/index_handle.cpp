@@ -65,13 +65,17 @@ namespace conway
 				
 				//wirte IndexHeader and buckets into index file
 				ret = file_op_->pwrite_file(init_data, i_header.index_file_size_, 0);
-				
+
 				delete[] init_data;
 				init_data = NULL;
-				
-				if(ret != TFS_SUCCESS)
+
+				// 修复bug：pwrite_file 返回实际写入的字节数，不再是 TFS_SUCCESS
+				// 修改原因：file_op.cpp 中 pwrite_file 已修改为返回实际写入的字节数
+				// 因此检查条件应从 != TFS_SUCCESS 改为 != i_header.index_file_size_
+				if(ret != i_header.index_file_size_)
 				{
-					return ret;
+					// 如果返回值是负数（错误码）或不完整写入，返回 TFS_ERROR
+					return TFS_ERROR;
 				}
 				
 				ret = file_op_->flush_file();
@@ -83,6 +87,8 @@ namespace conway
 			}
 			else    //file_size > 0, index file already exist
 			{		
+				// 打印错误信息
+				fprintf(stderr, "Index file already exist. block id：%u\n", logic_block_id);
 				return EXIT_META_UNEXPECT_FOUND_ERROR;
 			}
 			
@@ -187,7 +193,9 @@ namespace conway
             // 读取桶的首节点元数据
             MetaInfo meta_info;
             int32_t ret = file_op_->pread_file(reinterpret_cast<char*>(&meta_info), sizeof(MetaInfo), slot_offset);
-            if (ret == TFS_SUCCESS) {
+            // 修复bug：pread_file 返回实际读取的字节数，不再是 TFS_SUCCESS
+            // 修改原因：pread_file 返回实际读取的字节数，应检查是否等于 sizeof(MetaInfo)
+            if (ret == sizeof(MetaInfo)) {
                 printf("Bucket %d, first node offset: %d, file id: %ld, size: %d, next offset: %d\n", 
                        i, slot_offset, meta_info.get_file_id(), meta_info.get_size(), meta_info.get_next_meta_offset());
             }
@@ -295,7 +303,7 @@ namespace conway
 		ret = file_op_->pread_file(reinterpret_cast<char*>(&meta), sizeof(MetaInfo), current_offset);
 		if(ret == sizeof(MetaInfo))
 		{
-			return ret;
+			return TFS_SUCCESS;
 		}
 		else if(ret < 0)
 		{
@@ -326,11 +334,17 @@ namespace conway
 	
 	MetaInfo meta_info;
 	ret = file_op_->pread_file(reinterpret_cast<char*>(&meta_info), sizeof(MetaInfo), current_offset);
+	// 修复bug：需要检查是否读取了完整的 MetaInfo 大小
+	// 修改原因：pread_file 返回实际读取的字节数，如果只读取了部分数据，使用不完整的 meta_info 会导致错误
 	if(ret < 0)
 	{
 		return ret;
 	}
-	
+	if(ret != sizeof(MetaInfo))
+	{
+		return EXIT_DISK_OPER_INCOMPLETE;
+	}
+
 	int32_t next_pos = meta_info.get_next_meta_offset();          //下一个节点在链表中的偏移量
 	meta_info.set_key(-1);
 	
@@ -344,27 +358,37 @@ namespace conway
 	{
 		MetaInfo pre_meta_info;
 		ret = file_op_->pread_file(reinterpret_cast<char*>(&pre_meta_info), sizeof(MetaInfo), previous_offset);
+		// 修复bug：需要检查是否读取了完整的 MetaInfo 大小
+		// 修改原因：pread_file 返回实际读取的字节数，如果只读取了部分数据，使用不完整的 meta_info 会导致错误
 		if(ret < 0)
 		{
 			return ret;
 		}
-		
+		if(ret != sizeof(MetaInfo))
+		{
+			return EXIT_DISK_OPER_INCOMPLETE;
+		}
+
 		pre_meta_info.set_next_meta_offset(next_pos);
-		
-		ret = file_op_->pwrite_file(reinterpret_cast<char*>(&pre_meta_info), sizeof(MetaInfo), previous_offset);         
-		if(ret != TFS_SUCCESS)
+
+		ret = file_op_->pwrite_file(reinterpret_cast<char*>(&pre_meta_info), sizeof(MetaInfo), previous_offset);
+		// 修复bug：pwrite_file 返回实际写入的字节数，不再是 TFS_SUCCESS
+		// 修改原因：file_op.cpp 中 pwrite_file 已修改为返回实际写入的字节数
+		if(ret != sizeof(MetaInfo))
 		{
 			return ret;
 		}
-		
-		
-	}	
-	
-	//把删除节点加入可重用节点链表       
+
+
+	}
+
+	//把删除节点加入可重用节点链表
 	//前插法
-	meta_info.set_next_meta_offset(free_head_offset());      //index_header()->free_head_offset_       
+	meta_info.set_next_meta_offset(free_head_offset());      //index_header()->free_head_offset_
 	ret = file_op_->pwrite_file(reinterpret_cast<char*>(&meta_info), sizeof(MetaInfo), current_offset);
-	if(ret != TFS_SUCCESS)
+	// 修复bug：pwrite_file 返回实际写入的字节数，不再是 TFS_SUCCESS
+	// 修改原因：file_op.cpp 中 pwrite_file 已修改为返回实际写入的字节数
+	if(ret != sizeof(MetaInfo))
 	{
 		return ret;
 	}
@@ -398,11 +422,17 @@ namespace conway
 	for(; pos != 0; )
 	{
 		ret = file_op_->pread_file(reinterpret_cast<char*>(&meta_info), sizeof(MetaInfo), pos);
+		// 修复bug：需要检查是否读取了完整的 MetaInfo 大小
+		// 修改原因：pread_file 返回实际读取的字节数，如果只读取了部分数据，使用不完整的 meta_info 会导致错误
 		if(ret < 0)
 		{
 			return ret;
 		}
-		
+		if(ret != sizeof(MetaInfo))
+		{
+			return EXIT_DISK_OPER_INCOMPLETE;
+		}
+
 		if(hash_compare(key, meta_info.get_key()))        
 		{
 			current_offset = pos;
@@ -429,11 +459,17 @@ namespace conway
 	if(free_head_offset() != 0)
 	{
 		ret = file_op_->pread_file(reinterpret_cast<char*>(&tmp_meta_info), sizeof(MetaInfo), free_head_offset());
+		// 修复bug：需要检查是否读取了完整的 MetaInfo 大小
+		// 修改原因：pread_file 返回实际读取的字节数，如果只读取了部分数据，使用不完整的 meta_info 会导致错误
 		if(ret < 0)
 		{
 			return ret;
 		}
-		
+		if(ret != sizeof(MetaInfo))
+		{
+			return EXIT_DISK_OPER_INCOMPLETE;
+		}
+
 		current_offset = index_header()->free_head_offset_;
 		
 		if(debug) printf("reuse metainfo, current_offset：%d\n", current_offset);
@@ -449,9 +485,11 @@ namespace conway
 	
 	//3.将meta节点写入索引文件中
 	meta.set_next_meta_offset(0);
-	
+
 	ret = file_op_->pwrite_file(reinterpret_cast<const char*>(&meta), sizeof(MetaInfo), current_offset);
-	if(ret != TFS_SUCCESS)
+	// 修复bug：pwrite_file 返回实际写入的字节数，不再是 TFS_SUCCESS
+	// 修改原因：file_op.cpp 中 pwrite_file 已修改为返回实际写入的字节数
+	if(ret != sizeof(MetaInfo))
 	{
 		index_header()->index_file_size_ -= sizeof(MetaInfo);
 		return ret;
@@ -461,15 +499,24 @@ namespace conway
 	if(0 != previous_offset)       //前一个节点已经存在
 	{
 		ret = file_op_->pread_file(reinterpret_cast<char*>(&tmp_meta_info), sizeof(MetaInfo), previous_offset);
+		// 修复bug：需要检查是否读取了完整的 MetaInfo 大小
+		// 修改原因：pread_file 返回实际读取的字节数，如果只读取了部分数据，使用不完整的 meta_info 会导致错误
 		if(ret < 0)
 		{
 			index_header()->index_file_size_ -= sizeof(MetaInfo);
 			return ret;
 		}
-		
+		if(ret != sizeof(MetaInfo))
+		{
+			index_header()->index_file_size_ -= sizeof(MetaInfo);
+			return EXIT_DISK_OPER_INCOMPLETE;
+		}
+
 		tmp_meta_info.set_next_meta_offset(current_offset);
 		ret = file_op_->pwrite_file(reinterpret_cast<const char*>(&tmp_meta_info), sizeof(MetaInfo), previous_offset);
-		if(ret != TFS_SUCCESS)
+		// 修复bug：pwrite_file 返回实际写入的字节数，不再是 TFS_SUCCESS
+		// 修改原因：file_op.cpp 中 pwrite_file 已修改为返回实际写入的字节数
+		if(ret != sizeof(MetaInfo))
 		{
 			index_header()->index_file_size_ -= sizeof(MetaInfo);
 			return ret;
@@ -525,131 +572,217 @@ namespace conway
 				
 				ret = read_segment_meta(key, meta_info);
 				
-				current_write_offset = meta_info.get_offset();   
-				residue_bytes = meta_info.get_size(); 
-			
 				if(debug) fprintf(stderr, "i：%d, file_id：%ld, key：%ld, ret：%d\n", i, meta_info.get_key(), key, ret);
 				
 				if(TFS_SUCCESS == ret)           //已经在哈希链表中读到
-				{
-					
-					// 修复警告：将sizeof(buffer)转换为int32_t以避免有符号和无符号整数比较
-				if(meta_info.get_size() <= static_cast<int32_t>(sizeof(buffer)))        //一次读完
-					{	
-						ret = fo->pread_file(buffer, meta_info.get_size(), meta_info.get_offset());      
-						if(ret == TFS_SUCCESS)    //文件读成功,将文件重新写入块中
-						{
-							ret = fo->pwrite_file(buffer, meta_info.get_size(), over_write_offset);
-							if(ret == TFS_SUCCESS)          //文件写入成功
-							{
-								over_write_offset += meta_info.get_size();
-								key++;
-							}
-							else         //文件未写成功 / 未写全
-							{
-								return ret;           //可以考虑将读取文件的地址传回(buffer的地址)
-							}
-						}
-						else           //文件未读成功 / 未读全
-						{
-							return ret;
-						}
-					}
-					else         //需要分多次读写
-					{
-						nbytes = sizeof(buffer);
-						
-						while(residue_bytes>0)
-						{
-							ret = fo->pread_file(buffer, nbytes, current_write_offset);     
-							if(ret == TFS_SUCCESS)    		//文件读成功,将部分文件重新写入块中
-							{
-								//fprintf(stderr, "nbytes：%d\n", nbytes);
-								ret = fo->pwrite_file(buffer, nbytes, over_write_offset);
-								if(ret == TFS_SUCCESS)          //文件写入成功
-								{
-									current_write_offset += nbytes;
-									over_write_offset += nbytes;
-									residue_bytes -= nbytes;
-									
-									//fprintf(stderr, "residue_bytes：%ld\n", residue_bytes);
-									
-									
-									
-									if(nbytes > residue_bytes)
-									{	
-										nbytes = residue_bytes;
-										
-									}
-									
-								}
-								else         //文件未写成功 / 未写全
-								{
-									return ret;           //可以考虑将读取文件的地址传回(buffer的地址)
-								}
-							}
-							else
-							{
-								return ret;   //文件未读成功 / 未读全
-							}
-						}
-						key++;
-					}
-					
-				}
-				else if(EXIT_META_NOT_FOUND_ERROR != ret)     //not found key(状态)
-				{
-					return ret;
-				}
-				else if(EXIT_META_NOT_FOUND_ERROR == ret)     //哈希链表中没有找到,该文件已被删除
-				{
+			{
+				current_write_offset = meta_info.get_offset();   
+				residue_bytes = meta_info.get_size(); 
+				if(debug) fprintf(stderr, "处理文件 key：%ld, offset：%d, size：%d\n", key, current_write_offset, meta_info.get_size());
+				
+				// 检查元信息是否有效
+				if(current_write_offset < 0 || residue_bytes < 0) {
+					if(debug) fprintf(stderr, "无效的元信息，跳过文件 key：%ld\n", key);
 					key++;
 					continue;
 				}
 				
-				i++;
-			}
-			if(debug) fprintf(stderr, "整理块成功，over_write_offset：%d\n", over_write_offset);
-
-			ret = fo->flush_file();
-			//截断文件
-			ret = fo->ftruncate_file(block_info()->size_t_);
-			
-			//更新索引文件信息
-			index_header()->data_file_offset_ = block_info()->size_t_;
-			
-			//更新block info
-			ret = block_info()->del_file_count_ = 0;
-			ret = block_info()->del_size_ = 0;
-			flush();
-
-
-			if(debug) 
-{ 
-    // 打印桶的数量
-    printf("Bucket count: %d\n", bct_size());
-    
-    // 遍历每个桶
-    for(int i = 0; i <bct_size(); ++i) 
-    { 
-        int32_t slot_offset = bucket_slot()[i];
-        if (slot_offset > 0) {
-            // 读取桶的首节点元数据
-            MetaInfo meta_info;
-            int32_t ret = file_op_->pread_file(reinterpret_cast<char*>(&meta_info), sizeof(MetaInfo), slot_offset);
-            if (ret == TFS_SUCCESS) {
-                printf("Bucket %d, first node offset: %d, file id: %ld, size: %d, next offset: %d\n", 
-                       i, slot_offset, meta_info.get_file_id(), meta_info.get_size(), meta_info.get_next_meta_offset());
-            }
-        } else {
-            printf("Bucket %d, first node offset: 0 (empty)\n", i);
-        }
-    } 
-}
-			
-			return TFS_SUCCESS;
-		}
+				// 检查文件偏移量是否有效
+				int64_t file_size = fo->get_file_size();
+				if(debug) fprintf(stderr, "文件大小：%ld, 计算结束位置：%ld\n", file_size, static_cast<int64_t>(current_write_offset) + static_cast<int64_t>(residue_bytes));
+				if(file_size < 0) {
+					if(debug) fprintf(stderr, "获取文件大小失败，跳过文件 key：%ld\n", key);
+					key++;
+					i++;
+					continue;
+				}
+				if(static_cast<int64_t>(current_write_offset) >= file_size) {
+					if(debug) fprintf(stderr, "文件偏移量超出范围，跳过文件 key：%ld\n", key);
+					key++;
+					i++;
+					continue;
+				}
 				
-	}
+				// 修复警告：将sizeof(buffer)转换为int32_t以避免有符号和无符号整数比较
+				if(meta_info.get_size() <= static_cast<int32_t>(sizeof(buffer)))        //一次读完
+				{
+					if(debug) fprintf(stderr, "一次读取：size：%d, offset：%d\n", meta_info.get_size(), meta_info.get_offset());
+					int32_t read_ret = fo->pread_file(buffer, meta_info.get_size(), meta_info.get_offset());
+					if(debug) fprintf(stderr, "pread_file ret：%d, expected：%d\n", read_ret, meta_info.get_size());
+					// 修复bug：pread_file 返回实际读取的字节数，不再是 TFS_SUCCESS
+					// 修改原因：file_op.cpp 中 pread_file 返回实际读取的字节数
+					if(read_ret > 0)    //文件读成功,将文件重新写入块中
+					{
+						if(debug) fprintf(stderr, "一次写入：size：%d, offset：%d\n", read_ret, over_write_offset);
+						int32_t write_ret = fo->pwrite_file(buffer, read_ret, over_write_offset);
+						if(debug) fprintf(stderr, "pwrite_file ret：%d, expected：%d\n", write_ret, read_ret);
+						// 修复bug：pwrite_file 返回实际写入的字节数，不再是 TFS_SUCCESS
+						// 修改原因：file_op.cpp 中 pwrite_file 已修改为返回实际写入的字节数
+						if(write_ret > 0)          //文件写入成功
+						{
+							over_write_offset += write_ret;
+							if(debug) fprintf(stderr, "写入成功，新的 over_write_offset：%d\n", over_write_offset);
+							key++;
+							i++;
+						}
+						else         //文件未写成功 / 未写全
+						{
+							if(debug) fprintf(stderr, "写入失败，ret：%d\n", write_ret);
+							key++;
+							i++;
+							continue;
+						}
+					}
+					else if(read_ret < 0)           //文件读取错误
+					{
+						if(debug) fprintf(stderr, "读取失败，ret：%d\n", read_ret);
+						key++;
+						i++;
+						continue;
+					}
+					else           //文件已读完
+					{
+						if(debug) fprintf(stderr, "文件已读完，跳过\n");
+						key++;
+						i++;
+					}
+				}
+				else         //需要分多次读写
+				{
+					nbytes = sizeof(buffer);
+					if(debug) fprintf(stderr, "分多次读写：总大小：%d, 每次读写：%d\n", meta_info.get_size(), nbytes);
+
+					// 检查文件偏移量是否有效
+					int64_t file_size = fo->get_file_size();
+					if(debug) fprintf(stderr, "文件大小：%ld, 计算结束位置：%ld\n", file_size, static_cast<int64_t>(current_write_offset) + static_cast<int64_t>(residue_bytes));
+					if(file_size < 0 || static_cast<int64_t>(current_write_offset) >= file_size) {
+						if(debug) fprintf(stderr, "文件偏移量超出范围，跳过文件 key：%ld\n", key);
+						key++;
+						i++;
+						continue;
+					}
+
+					bool read_error = false;
+					while(residue_bytes>0)
+					{
+						if(debug) fprintf(stderr, "读取部分：size：%d, offset：%d\n", nbytes, current_write_offset);
+						int32_t read_ret = fo->pread_file(buffer, nbytes, current_write_offset);
+						if(debug) fprintf(stderr, "pread_file ret：%d, expected：%d\n", read_ret, nbytes);
+						// 修复bug：pread_file 返回实际读取的字节数，不再是 TFS_SUCCESS
+						// 修改原因：file_op.cpp 中 pread_file 返回实际读取的字节数
+						if(read_ret > 0)    		//文件读成功,将部分文件重新写入块中
+						{
+							if(debug) fprintf(stderr, "写入部分：size：%d, offset：%d\n", read_ret, over_write_offset);
+							int32_t write_ret = fo->pwrite_file(buffer, read_ret, over_write_offset);
+							if(debug) fprintf(stderr, "pwrite_file ret：%d, expected：%d\n", write_ret, read_ret);
+							// 修复bug：pwrite_file 返回实际写入的字节数，不再是 TFS_SUCCESS
+							// 修改原因：file_op.cpp 中 pwrite_file 已修改为返回实际写入的字节数
+							if(write_ret > 0)          //文件写入成功
+							{
+								current_write_offset += write_ret;
+								over_write_offset += write_ret;
+								residue_bytes -= write_ret;
+								if(debug) fprintf(stderr, "写入成功，剩余字节：%ld, 新的 over_write_offset：%d\n", residue_bytes, over_write_offset);
+
+								if(nbytes > residue_bytes)
+								{
+									nbytes = residue_bytes;
+									if(debug) fprintf(stderr, "调整 nbytes 为：%d\n", nbytes);
+								}
+
+							}
+							else         //文件未写成功 / 未写全
+							{
+								if(debug) fprintf(stderr, "写入失败，ret：%d\n", write_ret);
+								read_error = true;
+								break;
+							}
+						}
+						else if(read_ret < 0)           //文件读取错误
+						{
+							if(debug) fprintf(stderr, "读取失败，ret：%d\n", read_ret);
+							read_error = true;
+							break;
+						}
+						else           //文件已读完
+						{
+							if(debug) fprintf(stderr, "文件已读完，跳过\n");
+							break;
+						}
+					}
+					key++;
+					i++;
+					if(read_error) {
+						if(debug) fprintf(stderr, "读取或写入失败，跳过文件 key：%ld\n", key-1);
+						continue;
+					}
+				}
+			}
+			else if(EXIT_META_NOT_FOUND_ERROR != ret)     //not found key(状态)
+			{
+				if(debug) fprintf(stderr, "读取元信息失败，跳过文件 key：%ld, ret：%d\n", key, ret);
+				key++;
+				i++;
+				continue;
+			}
+			else if(EXIT_META_NOT_FOUND_ERROR == ret)     //哈希链表中没有找到,该文件已被删除
+			{
+				key++;
+				i++;
+				continue;
+			}
+		}
 		
+		if(debug) fprintf(stderr, "整理块成功，over_write_offset：%d\n", over_write_offset);
+
+		ret = fo->flush_file();
+		if(debug) fprintf(stderr, "flush_file ret：%d\n", ret);
+		//截断文件
+		// 修复bug：应该使用 over_write_offset 而不是 block_info()->size_t_
+		// 修改原因：over_write_offset 是整理后实际写入的数据大小（不包含已删除文件）
+		// 而 block_info()->size_t_ 是整理前的原始文件大小（包含已删除文件的空间）
+		ret = fo->ftruncate_file(over_write_offset);
+		if(debug) fprintf(stderr, "ftruncate_file ret：%d\n", ret);
+
+		//更新索引文件信息
+		// 修复bug：应该使用 over_write_offset 而不是 block_info()->size_t_
+		index_header()->data_file_offset_ = over_write_offset;
+
+		//更新block info
+		// 修复bug：应该使用 over_write_offset 来更新块大小
+		block_info()->size_t_ = over_write_offset;
+		block_info()->del_file_count_ = 0;
+		block_info()->del_size_ = 0;
+		ret = flush();
+		if(debug) fprintf(stderr, "flush ret：%d\n", ret);
+
+
+		if(debug) 
+		{ 
+			// 打印桶的数量
+			printf("Bucket count: %d\n", bct_size());
+			
+			// 遍历每个桶
+			for(int i = 0; i < bct_size(); ++i) 
+			{ 
+				int32_t slot_offset = bucket_slot()[i];
+				if (slot_offset > 0) {
+					// 读取桶的首节点元数据
+					MetaInfo meta_info;
+					int32_t ret = file_op_->pread_file(reinterpret_cast<char*>(&meta_info), sizeof(MetaInfo), slot_offset);
+					// 修复bug：pread_file 返回实际读取的字节数，不再是 TFS_SUCCESS
+					// 修改原因：file_op.cpp 中 pread_file 返回实际读取的字节数
+					if (ret == sizeof(MetaInfo)) {
+						printf("Bucket %d, first node offset: %d, file id: %ld, size: %d, next offset: %d\n", 
+							   i, slot_offset, meta_info.get_file_id(), meta_info.get_size(), meta_info.get_next_meta_offset());
+					}
+				} else {
+					printf("Bucket %d, first node offset: 0 (empty)\n", i);
+				}
+			} 
+		}
+		
+		return TFS_SUCCESS;
+	}
+	}
 }

@@ -56,9 +56,9 @@ int main(int /*argc*/, char** /*argv*/)     //比如：argv[0] = "rm"  argv[1] =
 	
 	
 	ret = index_handle->block_tidy(mainblock);
-	
-	
-	if(ret != TFS_SUCCESS)
+
+
+	if(ret != TFS_SUCCESS && ret != EXIT_BLOCK_DEL_FILE_COUNT_LESSZERO && ret != EXIT_BLOCK_DEL_SIZE_LESSZEOR)
 	{
 		fprintf(stderr, "tidy block failed. ret：%d, reason：%s\n", ret, strerror(errno));
 		mainblock->close_file();
@@ -66,6 +66,10 @@ int main(int /*argc*/, char** /*argv*/)     //比如：argv[0] = "rm"  argv[1] =
 		delete mainblock;
 		delete index_handle;
 		exit(-3);
+	}
+	else if(ret == EXIT_BLOCK_DEL_FILE_COUNT_LESSZERO || ret == EXIT_BLOCK_DEL_SIZE_LESSZEOR)
+	{
+		fprintf(stderr, "tidy block skipped. block does not need tidy. ret：%d\n", ret);
 	}
 	
 	

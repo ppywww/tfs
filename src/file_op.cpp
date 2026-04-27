@@ -119,6 +119,7 @@ namespace conway
 			
 			int i = 0;
 			
+			int32_t total_written = 0;         //总写入长度
 			while(left > 0)
 			{
 				++i;
@@ -153,7 +154,12 @@ namespace conway
 						return written_len;
 					}
 				}
-				                              /*读取成功*/
+				else if(0 == written_len)   //写入到文件尾
+				{
+					break;
+				}
+				                              /*写入成功*/
+				total_written += written_len;
 				left -= written_len;          //重置剩余字节数
 				p_tmp += written_len;         //重置已写入的缓冲的位置
 				write_offset += written_len;  //重置写入偏移量
@@ -162,19 +168,22 @@ namespace conway
 			{
 				return EXIT_DISK_OPER_INCOMPLETE;   //未达到预期（文件未写全）
 			}
-			
-			
-			return TFS_SUCCESS;      //文件写入成功
+
+
+			// 修复bug：pwrite_file 应返回实际写入的字节数，与 pread_file 保持一致
+			// 修改原因：pread_file 返回实际读取的字节数，pwrite_file 也应返回实际写入的字节数
+			// 这样调用者可以准确判断读写操作是否完全成功
+			return total_written;      //返回实际写入的字节数
 			
 		}
 		
 		int FileOperation::write_file(const char* buf, const int32_t nbytes)
 		{
 			int32_t left = nbytes;          //需要写入的剩余的字节数
-			//int64_t write_offset = 0;       //起始位置的偏移量
 			int32_t written_len = 0;        //已写的长度
 			const char* p_tmp = buf;              //已写到的缓冲的位置
-			
+			// 修复警告：删除未使用的 write_offset 变量注释
+			// 修改原因：write() 函数不使用偏移量参数（使用 pwrite64 代替），故注释掉的变量无意义
 			int i = 0;
 			
 			while(left > 0)
@@ -221,8 +230,10 @@ namespace conway
 			{
 				return EXIT_DISK_OPER_INCOMPLETE;       //未达到预期（文件未写全）
 			}
-			
-			return TFS_SUCCESS;
+
+			// 修复bug：write_file 应返回实际写入的字节数，与 pwrite_file 保持一致
+			// 修改原因：保持所有文件操作函数返回值的一致性
+			return nbytes;
 		}
 		
 		int64_t FileOperation::get_file_size()

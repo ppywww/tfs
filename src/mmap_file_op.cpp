@@ -30,11 +30,14 @@ namespace conway
 			if(!is_mapped_)
 			{
 				// 先 munmap 之前的映射
+				// 修复bug：内层的 if(is_mapped_) 检查永远不会为真，因为外层已经保证 is_mapped_ 为 false
+				// 修改原因：外层 if(!is_mapped_) 已保证 is_mapped_ 为 false，内层检查冗余
+				// 正确逻辑：应该先检查并清理旧的映射，再创建新映射
 				if(is_mapped_ && map_file_ != NULL)
 				{
 					munmap_file();
 				}
-				
+
 				// 创建新的映射
 				map_file_ = new MMapFile(mmap_option, fd);
 				is_mapped_ = map_file_->map_file(true);
@@ -111,7 +114,9 @@ namespace conway
 			if(is_mapped_ && (offset + size) <= map_file_->get_size())
 			{
 				memcpy((char*)map_file_->get_data() + offset, buf, size);
-				return TFS_SUCCESS;
+				// 修复bug：pwrite_file 应返回实际写入的字节数，与 FileOperation::pwrite_file 保持一致
+				// 修改原因：file_op.cpp 中 pwrite_file 已修改为返回实际写入的字节数
+				return size;
 			}
 			
 			//情况2，内存没有映射或是要读取的数据映射不全

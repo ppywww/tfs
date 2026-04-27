@@ -59,7 +59,8 @@ int main(int /*argc*/, char** /*argv*/)     //比如：argv[0] = "rm"  argv[1] =
 	int32_t data_offset = index_handle->get_block_data_offset();      //offset to write next data in block
 	uint32_t file_no = index_handle->block_info()->seq_no_;           //next available file number
 	
-	if((ret = mainblock->pwrite_file(buffer, sizeof(buffer), data_offset)) != TFS_SUCCESS)
+	// 修复：pwrite_file 现在返回实际写入的字节数，不再是 TFS_SUCCESS
+if((ret = mainblock->pwrite_file(buffer, sizeof(buffer), data_offset)) != sizeof(buffer))
 	{
 		fprintf(stderr, "write to mian block failed. ret：%d, reason：%s\n", ret, strerror(errno));
 		mainblock->close_file();

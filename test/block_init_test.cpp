@@ -31,16 +31,23 @@ int main(int /*argc*/, char** /*argv*/)     //比如：argv[0] = "rm"  argv[1] =
 		exit(-1);
 	}	
 	
-	//1.创建索引文件
+	//1.创建目录结构
+	system("mkdir -p ./index");
+	system("mkdir -p ./mainblock");
+
+	//2.创建索引文件
 	IndexHandle* index_handle = new IndexHandle(".", block_id);   //索引文件句柄    //free
-	
+
 	if(debug) printf("Init index ...\n");
-	
+
 	ret = index_handle->create(block_id, bucket_size, mmap_option);
 	
 	if(ret != TFS_SUCCESS)
 	{
-		fprintf(stderr, "create index %d faild.\n", block_id);
+		// fprintf(stderr, "create index %d faild.\n", block_id);
+		// 打印错误信息
+		fprintf(stderr, "create index %d faild. reason：%d\n", block_id, ret);
+			
 		//elete mainblock;
 		delete index_handle;
 		exit(-3);

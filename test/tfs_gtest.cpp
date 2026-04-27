@@ -107,7 +107,8 @@ TEST_F(FileOperationTest, WriteAndReadFile) {
     const char* write_data = "Hello TFS!";
     int write_len = strlen(write_data);
     int ret = fo.write_file(write_data, write_len);
-    EXPECT_EQ(ret, TFS_SUCCESS);
+    // 修复：write_file 现在返回实际写入的字节数，不再是 TFS_SUCCESS
+    EXPECT_EQ(ret, write_len);
     fo.flush_file();
     
     char read_buf[100];
@@ -128,10 +129,12 @@ TEST_F(FileOperationTest, PWritePReadFile) {
     const char* data2 = "Second";
     
     int ret = fo.pwrite_file(data1, strlen(data1), 0);
-    EXPECT_EQ(ret, TFS_SUCCESS);
+    // 修复：pwrite_file 现在返回实际写入的字节数，不再是 TFS_SUCCESS
+    EXPECT_EQ(ret, strlen(data1));
     
     ret = fo.pwrite_file(data2, strlen(data2), 100);
-    EXPECT_EQ(ret, TFS_SUCCESS);
+    // 修复：pwrite_file 现在返回实际写入的字节数，不再是 TFS_SUCCESS
+    EXPECT_EQ(ret, strlen(data2));
     
     char buf[100];
     memset(buf, 0, sizeof(buf));
@@ -242,7 +245,7 @@ TEST_F(IndexHandleTest, WriteAndReadMeta) {
     
     MetaInfo meta_read;
     ret = index.read_segment_meta(file_id, meta_read);
-    EXPECT_EQ(ret, sizeof(MetaInfo));
+    EXPECT_EQ(ret, TFS_SUCCESS);
     EXPECT_EQ(meta_read, meta_write);
 }
 
@@ -300,6 +303,87 @@ TEST_F(IndexHandleTest, Remove) {
     
     int ret = index.remove(block_id);
     EXPECT_EQ(ret, TFS_SUCCESS);
+}
+
+TEST_F(IndexHandleTest, HashFind) {
+    IndexHandle index(base_path, block_id);
+    index.create(block_id, DEFAULT_BUCKET_SIZE, mmap_option);
+    
+    // Write a meta info
+    uint64_t file_id = 12345;
+    MetaInfo meta_write(file_id, 100, 200, 0);
+    int ret = index.write_segment_meta(file_id, meta_write);
+    EXPECT_EQ(ret, TFS_SUCCESS);
+    
+    // Test hash find
+    int32_t current_offset = 0, previous_offset = 0;
+    ret = index.hash_find(file_id, current_offset, previous_offset);
+    EXPECT_EQ(ret, TFS_SUCCESS);
+    EXPECT_GT(current_offset, 0);
+    EXPECT_EQ(previous_offset, 0);
+    
+    // Test hash find for non-existent file
+    ret = index.hash_find(99999, current_offset, previous_offset);
+    EXPECT_EQ(ret, EXIT_META_NOT_FOUND_ERROR);
+}
+
+TEST_F(IndexHandleTest, BlockTidy) {
+    IndexHandle index(base_path, block_id);
+    index.create(block_id, DEFAULT_BUCKET_SIZE, mmap_option);
+    
+    // Create a main block file
+    string block_file = base_path + MAINBLOCK_DIR_PREFIX + to_string(block_id);
+    FileOperation mainblock(block_file, O_RDWR | O_CREAT | O_LARGEFILE);
+    int fd = mainblock.open_file();
+    EXPECT_GT(fd, 0);
+    
+    // Write some data to main block
+    const char* test_data = "Test data for block tidy";
+    int data_size = strlen(test_data);
+    mainblock.write_file(test_data, data_size);
+    mainblock.flush_file();
+    
+    // Write meta info
+    uint64_t file_id = 12345;
+    MetaInfo meta(file_id, 0, data_size, 0);
+    int ret = index.write_segment_meta(file_id, meta);
+    EXPECT_EQ(ret, TFS_SUCCESS);
+    
+    // Update block info
+    ret = index.update_block_info(C_OPER_INSERT, data_size);
+    EXPECT_EQ(ret, TFS_SUCCESS);
+    
+    // Test block tidy
+    ret = index.block_tidy(&mainblock);
+    // block_tidy returns EXIT_BLOCK_DEL_FILE_COUNT_LESSZERO if no deleted files, which is normal
+    EXPECT_TRUE(ret == TFS_SUCCESS || ret == EXIT_BLOCK_DEL_FILE_COUNT_LESSZERO || ret == EXIT_BLOCK_DEL_SIZE_LESSZEOR);
+    
+    mainblock.close_file();
+}
+
+TEST_F(IndexHandleTest, CommitAndGetBlockDataOffset) {
+    IndexHandle index(base_path, block_id);
+    index.create(block_id, DEFAULT_BUCKET_SIZE, mmap_option);
+    
+    // Get initial offset
+    int initial_offset = index.get_block_data_offset();
+    EXPECT_EQ(initial_offset, 0);
+    
+    // Commit some offset
+    int commit_offset = 1000;
+    index.commit_block_data_offset(commit_offset);
+    
+    // Get offset again
+    int new_offset = index.get_block_data_offset();
+    EXPECT_EQ(new_offset, initial_offset + commit_offset);
+    
+    // Commit more offset
+    int additional_offset = 500;
+    index.commit_block_data_offset(additional_offset);
+    
+    // Get final offset
+    int final_offset = index.get_block_data_offset();
+    EXPECT_EQ(final_offset, new_offset + additional_offset);
 }
 
 int main(int argc, char **argv) {

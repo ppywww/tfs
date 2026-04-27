@@ -13,7 +13,7 @@ namespace conway
 			public:
 			  FileOperation(const std::string& file_name, 
 				const int open_flags = O_RDWR|O_LARGEFILE);
-			  ~FileOperation();
+			  virtual ~FileOperation();
 	
 			  int open_file();   //打开文件
 			  void close_file(); //关闭文件

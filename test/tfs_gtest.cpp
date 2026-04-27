@@ -242,7 +242,7 @@ TEST_F(IndexHandleTest, WriteAndReadMeta) {
     
     MetaInfo meta_read;
     ret = index.read_segment_meta(file_id, meta_read);
-    EXPECT_EQ(ret, TFS_SUCCESS);
+    EXPECT_EQ(ret, sizeof(MetaInfo));
     EXPECT_EQ(meta_read, meta_write);
 }
 
@@ -252,9 +252,10 @@ TEST_F(IndexHandleTest, DeleteMeta) {
     
     uint64_t file_id = 12345;
     MetaInfo meta(file_id, 100, 200, 0);
-    index.write_segment_meta(file_id, meta);
+    int ret = index.write_segment_meta(file_id, meta);
+    EXPECT_EQ(ret, TFS_SUCCESS);
     
-    int ret = index.delete_segment_meta(file_id);
+    ret = index.delete_segment_meta(file_id);
     EXPECT_EQ(ret, TFS_SUCCESS);
     
     MetaInfo meta_read;

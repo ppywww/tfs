@@ -52,6 +52,7 @@ namespace conway
 			int32_t left = nbytes;          //剩余的字节数
 			int64_t read_offset = offset;   //起始位置的偏移量
 			int32_t read_len = 0;           //已读的长度
+			int32_t total_read = 0;         //总读取长度
 			char* p_tmp = buf;              //已读取的缓冲的位置
 			
 			int i = 0;
@@ -95,6 +96,7 @@ namespace conway
 					break;
 				}
 				                          /*读取成功*/
+				total_read += read_len;
 				left -= read_len;         //重置剩余字节数
 				p_tmp += read_len;        //重置读取缓冲的位置
 				read_offset += read_len;  //重置读取偏移量
@@ -105,7 +107,7 @@ namespace conway
 			}
 			
 			
-			return TFS_SUCCESS;      //文件读取成功
+			return total_read;      //返回实际读取的字节数
 		}
 		
 		int FileOperation::pwrite_file(const char* buf, const int32_t nbytes, const int64_t offset)

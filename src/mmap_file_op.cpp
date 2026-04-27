@@ -29,10 +29,13 @@ namespace conway
 			
 			if(!is_mapped_)
 			{
-				if(map_file_)
+				// 先 munmap 之前的映射
+				if(is_mapped_ && map_file_ != NULL)
 				{
-					delete (map_file_);
+					munmap_file();
 				}
+				
+				// 创建新的映射
 				map_file_ = new MMapFile(mmap_option, fd);
 				is_mapped_ = map_file_->map_file(true);
 			}
@@ -43,20 +46,27 @@ namespace conway
 			}
 			else
 			{
+				// 如果映射失败，清理资源
+				if(map_file_)
+				{
+					delete map_file_;
+					map_file_ = NULL;
+				}
 				return TFS_ERROR;
 			}		
 		}
 		
 		int MMapFileOperation::munmap_file()
-		{
-			if(is_mapped_ && map_file_ != NULL)
-			{
-				delete map_file_;    //调用析构函数 ~MMapFile()
-				is_mapped_ = false;
-			}
-			
-			return TFS_SUCCESS;
-		}
+{
+	if(is_mapped_ && map_file_ != NULL)
+	{
+		delete map_file_;    //调用析构函数 ~MMapFile()
+		map_file_ = NULL;
+		is_mapped_ = false;
+	}
+	
+	return TFS_SUCCESS;
+}
 		
 		void* MMapFileOperation::get_map_data() const
 		{
@@ -75,13 +85,13 @@ namespace conway
 			{
 				if(debug) fprintf(stdout, "mmap_file_op pread, size：%d, offset：%" __PRI64_PREFIX"d, \
 				map file size：%d. need mremap\n", size, offset, map_file_->get_size());
-				map_file_->mremap_file();				
+				map_file_->mremap_file();			
 			}
 			
 			if(is_mapped_ && (offset + size) <= map_file_->get_size())
 			{
 				memcpy(buf, (char*)map_file_->get_data() + offset, size);
-				return TFS_SUCCESS;
+				return size;
 			}
 			
 			//情况2，内存没有映射或是要读取的数据映射不全

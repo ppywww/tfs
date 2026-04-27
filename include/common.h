@@ -96,16 +96,17 @@ namespace conway
 			}
 			
 			MetaInfo& operator=(const MetaInfo& meta_info)   //重载复制构造
+		{
+			if(this == &meta_info)    
 			{
-				if(this == &meta_info)    
-				{
-					return *this;
-				}
-				fileid_ = meta_info.fileid_;
-				location_.inner_offset_ = meta_info.location_.inner_offset_;
-				location_.size_ = meta_info.location_.size_;
-				next_meta_offset_ = meta_info.next_meta_offset_;				
+				return *this;
 			}
+			fileid_ = meta_info.fileid_;
+			location_.inner_offset_ = meta_info.location_.inner_offset_;
+			location_.size_ = meta_info.location_.size_;
+			next_meta_offset_ = meta_info.next_meta_offset_;
+			return *this;                
+		}
 			
 			MetaInfo& clone(const MetaInfo& meta_info)       //克隆
 			{
